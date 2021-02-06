@@ -1,0 +1,68 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+# This workflow will download a prebuilt Ruby version, install dependencies and run tests with Rake
+# For more information see: https://github.com/marketplace/actions/setup-ruby-jruby-and-truffleruby
+
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 7 * * *' # 16時
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: ['ubuntu-20.04', 'ubuntu-18.04']
+        ruby-version: ['2.6', '2.7']
+
+    services:
+      postgres:
+        image: postgres:10
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: main
+    - name: Setup node
+      uses: actions/setup-node@v2
+      with:
+        node-version: 14
+    - name: Setup yarn
+      run: npm install -g yarn
+    - name: Setup base packages
+      run: sudo apt-get install -y build-essential wget ca-certificates
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@473e4d8fe5dd94ee328fdfca9f8c9c7afc9dae5e
+      with:
+        ruby-version: ${{ matrix.ruby-version }}
+        bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+    - name: Check Bundler version
+      run: bundle -v
+    - name: Run tests
+      env:
+        RAILS_ENV: development
+        PGHOST: localhost
+        PGUSER: postgres
+        PGPASSWORD: postgres
+      run: |
+        yarn install --check-files
+        bundle exec rake db:create
+        bundle exec rake db:migrate
+        psql -l
